@@ -21,7 +21,6 @@ def main():
     set_seed(42)
     MAX_QUERIES = 100
 
-    # Step 1: Load dataset
     logger.info("=" * 60)
     logger.info("STEP 1: Loading T²-RAGBench dataset...")
     logger.info("=" * 60)
@@ -31,23 +30,19 @@ def main():
     logger.info(f"Dataset loaded in {t.elapsed:.1f}s")
     logger.info(data.summary())
 
-    # Step 2: Save processed files
     logger.info("\nSTEP 2: Saving processed corpus and queries...")
     save_corpus_texts(data)
     save_queries(data)
 
-    # Step 3: Prepare corpus
     doc_ids = list(data.corpus.keys())
     documents = [data.corpus[did].text for did in doc_ids]
     logger.info(f"\nCorpus: {len(doc_ids)} unique documents")
     logger.info(f"Avg doc length: {sum(len(d) for d in documents) / len(documents):.0f} chars")
 
-    # Step 4: Chunk (whole document mode)
     chunk_ids, chunk_texts, chunk_to_doc = chunk_corpus(
         doc_ids, documents, strategy="whole_doc"
     )
 
-    # Step 5: Build BM25 index
     logger.info("\n" + "=" * 60)
     logger.info("STEP 3: Building BM25 index...")
     logger.info("=" * 60)
@@ -57,7 +52,6 @@ def main():
         bm25.build_index(chunk_ids, chunk_texts)
     logger.info(f"BM25 index built in {t.elapsed:.2f}s")
 
-    # Step 6: Run retrieval on 100 queries
     logger.info("\n" + "=" * 60)
     logger.info(f"STEP 4: Running BM25 retrieval on {MAX_QUERIES} queries...")
     logger.info("=" * 60)
@@ -77,7 +71,6 @@ def main():
     avg_latency = sum(latencies) / len(latencies)
     logger.info(f"Avg retrieval latency: {avg_latency:.1f}ms/query")
 
-    # Step 7: Compute metrics
     logger.info("\n" + "=" * 60)
     logger.info("STEP 5: Computing retrieval metrics...")
     logger.info("=" * 60)
@@ -87,12 +80,10 @@ def main():
     for name, value in sorted(metrics.items()):
         logger.info(f"  {name}: {value:.4f}")
 
-    # Step 8: Oracle baseline check
     logger.info("\n" + "=" * 60)
     logger.info("STEP 6: Oracle baseline verification...")
     logger.info("=" * 60)
 
-    # Create fake "oracle" retrieval where gold doc is always rank 1
     from src.utils.common import RetrievedDoc
     oracle_retrieved = []
     for qa in qa_items:
@@ -111,7 +102,6 @@ def main():
     assert oracle_metrics["recall@1"] == 1.0, "Oracle should have perfect recall!"
     logger.info("  ✓ Oracle baseline verified (perfect scores)")
 
-    # Step 9: Test generation metrics
     logger.info("\n" + "=" * 60)
     logger.info("STEP 7: Testing generation metrics...")
     logger.info("=" * 60)
@@ -129,7 +119,6 @@ def main():
         f1 = token_f1(pred, gold)
         logger.info(f"  [{desc}] pred='{pred}' gold='{gold}' → NM={nm:.1f} EM={em:.1f} F1={f1:.2f}")
 
-    # Step 10: Per-subset breakdown
     logger.info("\n" + "=" * 60)
     logger.info("STEP 8: Per-subset breakdown...")
     logger.info("=" * 60)
@@ -146,7 +135,6 @@ def main():
             if name in subset_metrics:
                 logger.info(f"    {name}: {subset_metrics[name]:.4f}")
 
-    # Summary
     logger.info("\n" + "=" * 60)
     logger.info("SANITY CHECK COMPLETE")
     logger.info("=" * 60)

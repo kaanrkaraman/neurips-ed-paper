@@ -28,13 +28,9 @@ from src.utils.common import PROJECT_ROOT, get_logger
 
 logger = get_logger(__name__)
 
-# Where to look for result JSONs. Newer BGE-M3 runs land in `data/results/`;
-# original OpenAI runs sit in `results/` at repo root.
 RESULT_DIRS = [PROJECT_ROOT / "data" / "results", PROJECT_ROOT / "results"]
 
 
-# Method label, file pattern (matched from the END of filename), display order.
-# The order of this list determines table row order.
 METHOD_PANEL: list[tuple[str, str]] = [
     ("BM25 (sparse)",                  "bm25_openai_large_whole_doc.json"),
     ("Dense (text-embed-3-large)",     "dense_openai_whole_doc.json"),

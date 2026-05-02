@@ -66,10 +66,6 @@ class HybridRetriever(BaseRetriever):
         self.alpha = alpha
         self.candidate_k_multiplier = candidate_k_multiplier
 
-    # ------------------------------------------------------------------
-    # Index construction (delegates to child retrievers)
-    # ------------------------------------------------------------------
-
     def build_index(self, doc_ids: list[str], documents: list[str]) -> None:
         """Build indices for both the BM25 and dense retrievers.
 
@@ -84,10 +80,6 @@ class HybridRetriever(BaseRetriever):
         self.bm25_retriever.build_index(doc_ids, documents)
         self.dense_retriever.build_index(doc_ids, documents)
         logger.info("Hybrid index construction complete.")
-
-    # ------------------------------------------------------------------
-    # Fusion helpers
-    # ------------------------------------------------------------------
 
     @staticmethod
     def _collect_candidates(
@@ -228,10 +220,6 @@ class HybridRetriever(BaseRetriever):
             return self._fuse_dbsf(candidates)
         else:
             raise ValueError(f"Unknown fusion method: {self.fusion!r}")
-
-    # ------------------------------------------------------------------
-    # Retrieval
-    # ------------------------------------------------------------------
 
     def _build_results(
         self,

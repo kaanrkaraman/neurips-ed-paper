@@ -44,14 +44,9 @@ class DenseRetriever(BaseRetriever):
         self.embedder = embedder
         self.embed_batch_size = embed_batch_size
 
-        # Populated by build_index / load_index
         self._index: faiss.IndexFlatIP | None = None
         self._doc_ids: list[str] = []
         self._documents: list[str] = []
-
-    # ------------------------------------------------------------------
-    # Index construction
-    # ------------------------------------------------------------------
 
     def build_index(self, doc_ids: list[str], documents: list[str]) -> None:
         """Embed the corpus and build a FAISS inner-product index.
@@ -75,14 +70,12 @@ class DenseRetriever(BaseRetriever):
         self._doc_ids = list(doc_ids)
         self._documents = list(documents)
 
-        # Embed in batches to control peak memory.
         with Timer() as t_embed:
             embeddings = self._embed_in_batches(documents)
 
         logger.info("Embedding completed in %.2f s (%d docs, dim=%d).",
                      t_embed.elapsed, len(documents), embeddings.shape[1])
 
-        # Build FAISS index.
         with Timer() as t_index:
             dimension = embeddings.shape[1]
             self._index = faiss.IndexFlatIP(dimension)
@@ -98,10 +91,6 @@ class DenseRetriever(BaseRetriever):
             batch = texts[start : start + self.embed_batch_size]
             all_embeddings.append(self.embedder.embed_documents(batch))
         return np.vstack(all_embeddings).astype(np.float32)
-
-    # ------------------------------------------------------------------
-    # Retrieval
-    # ------------------------------------------------------------------
 
     def _ensure_index(self) -> None:
         if self._index is None:
@@ -132,8 +121,7 @@ class DenseRetriever(BaseRetriever):
         for rank, (score, idx) in enumerate(
             zip(scores[0], indices[0]), start=1
         ):
-            if idx == -1:
-                # FAISS returns -1 when fewer than k results exist.
+            if idx == -1:  # FAISS sentinel: fewer than k matches
                 break
             results.append(
                 RetrievedDoc(
@@ -197,10 +185,6 @@ class DenseRetriever(BaseRetriever):
         logger.info("Dense batch retrieval finished in %.2f s (avg %.1f ms/query).",
                      t.elapsed, t.elapsed_ms / max(len(queries), 1))
         return batch_results
-
-    # ------------------------------------------------------------------
-    # Persistence
-    # ------------------------------------------------------------------
 
     def save_index(self, directory: str | Path) -> None:
         """Persist the FAISS index and associated metadata to disk.

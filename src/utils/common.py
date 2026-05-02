@@ -146,7 +146,6 @@ def collect_provenance(
     """
     prov: dict[str, Any] = {}
 
-    # Git revision of the working tree.
     try:
         sha = subprocess.check_output(
             ["git", "rev-parse", "HEAD"],
@@ -157,13 +156,11 @@ def collect_provenance(
     except (subprocess.CalledProcessError, FileNotFoundError):
         prov["git_sha"] = None
 
-    # Library versions.
     prov["torch_version"] = _safe_version("torch")
     prov["transformers_version"] = _safe_version("transformers")
     prov["sentence_transformers_version"] = _safe_version("sentence-transformers")
     prov["faiss_version"] = _safe_version("faiss-cpu") or _safe_version("faiss-gpu")
 
-    # CUDA + GPU.
     try:
         import torch
         prov["cuda_available"] = bool(torch.cuda.is_available())
@@ -176,7 +173,7 @@ def collect_provenance(
         prov["cuda_version"] = None
         prov["gpu_name"] = None
 
-    # HF Hub revision of the embedding model (best-effort: skipped if no network).
+    # Best-effort: skipped if no network.
     if embedding_model:
         try:
             from huggingface_hub import HfApi
@@ -185,7 +182,6 @@ def collect_provenance(
         except Exception:
             prov["embedding_model_revision"] = None
 
-    # SHA-256 of the FAISS index file, if present.
     if index_path is not None:
         ip = Path(index_path)
         if ip.is_dir():

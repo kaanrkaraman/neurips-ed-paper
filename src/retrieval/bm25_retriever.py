@@ -50,15 +50,10 @@ class BM25Retriever(BaseRetriever):
         self.b = b
         self._tokenize = tokenizer or _tokenize
 
-        # Populated by build_index
         self._index: BM25Okapi | None = None
         self._doc_ids: list[str] = []
         self._documents: list[str] = []
         self._tokenized_corpus: list[list[str]] = []
-
-    # ------------------------------------------------------------------
-    # Index construction
-    # ------------------------------------------------------------------
 
     def build_index(self, doc_ids: list[str], documents: list[str]) -> None:
         """Tokenize the corpus and build a BM25Okapi index.
@@ -92,10 +87,6 @@ class BM25Retriever(BaseRetriever):
         logger.info("BM25 index built in %.2f s (%d documents).",
                      t.elapsed, len(documents))
 
-    # ------------------------------------------------------------------
-    # Retrieval
-    # ------------------------------------------------------------------
-
     def _ensure_index(self) -> None:
         if self._index is None:
             raise RuntimeError("Index has not been built yet. Call build_index() first.")
@@ -120,10 +111,9 @@ class BM25Retriever(BaseRetriever):
         tokenized_query = self._tokenize(query)
         scores: np.ndarray = self._index.get_scores(tokenized_query)
 
-        # Partial sort for efficiency: grab the top-k indices.
+        # argpartition + argsort: O(n) selection of top-k, then sort just those k.
         k = min(top_k, len(self._doc_ids))
         top_indices = np.argpartition(scores, -k)[-k:]
-        # Sort those k indices by descending score.
         top_indices = top_indices[np.argsort(scores[top_indices])[::-1]]
 
         results: list[RetrievedDoc] = []

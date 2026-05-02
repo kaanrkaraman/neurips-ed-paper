@@ -38,8 +38,6 @@ DEFAULT_CONTEXT_PROMPT = (
     "retrieval of the chunk. Answer only with the context, nothing else."
 )
 
-# When the corpus consists of whole documents (no chunking), the prompt
-# generates a summary-style context for the document itself.
 DEFAULT_DOCUMENT_CONTEXT_PROMPT = (
     "Here is a document:\n"
     "<document>\n{document}\n</document>\n\n"
@@ -118,7 +116,6 @@ class ContextualRetriever(BaseRetriever):
             azure_endpoint=os.getenv("AZURE_LLM_ENDPOINT"),
         )
 
-        # Build or reuse the hybrid retriever.
         if hybrid_retriever is not None:
             self._hybrid = hybrid_retriever
         else:
@@ -130,12 +127,7 @@ class ContextualRetriever(BaseRetriever):
                 fusion="rrf",
             )
 
-        # Mapping from contextualized text back to original text.
-        self._original_texts: dict[str, str] = {}  # doc_id -> original text
-
-    # ------------------------------------------------------------------
-    # Context generation
-    # ------------------------------------------------------------------
+        self._original_texts: dict[str, str] = {}
 
     def _generate_context(
         self,
@@ -180,10 +172,6 @@ class ContextualRetriever(BaseRetriever):
                 "Contextual: LLM context generation failed; using empty context."
             )
             return ""
-
-    # ------------------------------------------------------------------
-    # Corpus contextualisation
-    # ------------------------------------------------------------------
 
     def _contextualize_corpus(
         self,
@@ -241,10 +229,6 @@ class ContextualRetriever(BaseRetriever):
             t.elapsed, len(documents),
         )
         return contextualized
-
-    # ------------------------------------------------------------------
-    # Index construction
-    # ------------------------------------------------------------------
 
     def build_index(self, doc_ids: list[str], documents: list[str]) -> None:
         """Contextualise each document and build the hybrid index.
@@ -311,10 +295,6 @@ class ContextualRetriever(BaseRetriever):
 
         logger.info("Contextual (chunked): index build complete.")
 
-    # ------------------------------------------------------------------
-    # Retrieval
-    # ------------------------------------------------------------------
-
     def retrieve(self, query: str, top_k: int = 5) -> list[RetrievedDoc]:
         """Retrieve from the contextualized hybrid index.
 
@@ -336,8 +316,6 @@ class ContextualRetriever(BaseRetriever):
         """
         results = self._hybrid.retrieve(query, top_k=top_k)
 
-        # Re-tag results with our method name and attach original text
-        # in metadata.
         tagged: list[RetrievedDoc] = []
         for doc in results:
             original_text = self._original_texts.get(doc.doc_id, doc.text)

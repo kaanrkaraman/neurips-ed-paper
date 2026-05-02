@@ -85,10 +85,6 @@ class HyDERetriever(BaseRetriever):
             azure_endpoint=os.getenv("AZURE_LLM_ENDPOINT"),
         )
 
-    # ------------------------------------------------------------------
-    # Index construction (delegates to inner dense retriever)
-    # ------------------------------------------------------------------
-
     def build_index(self, doc_ids: list[str], documents: list[str]) -> None:
         """Build the dense index.
 
@@ -105,10 +101,6 @@ class HyDERetriever(BaseRetriever):
         """
         logger.info("HyDE: delegating index build to inner dense retriever.")
         self.dense_retriever.build_index(doc_ids, documents)
-
-    # ------------------------------------------------------------------
-    # Hypothetical document generation
-    # ------------------------------------------------------------------
 
     def _generate_hypothetical_doc(self, query: str) -> str:
         """Call the LLM to produce a single hypothetical answer passage.
@@ -136,8 +128,7 @@ class HyDERetriever(BaseRetriever):
             return text.strip()
         except Exception:
             logger.exception("HyDE: LLM call failed for query: %s", query)
-            # Fall back to the original query so retrieval still works.
-            return query
+            return query  # fall back so retrieval still runs
 
     def _generate_hypothetical_docs(self, query: str) -> list[str]:
         """Generate ``num_generations`` hypothetical documents.
@@ -160,10 +151,6 @@ class HyDERetriever(BaseRetriever):
             docs.append(doc)
         return docs
 
-    # ------------------------------------------------------------------
-    # Retrieval
-    # ------------------------------------------------------------------
-
     def retrieve(self, query: str, top_k: int = 5) -> list[RetrievedDoc]:
         """Generate a hypothetical document, embed it, and search the index.
 
@@ -185,30 +172,26 @@ class HyDERetriever(BaseRetriever):
         """
         self.dense_retriever._ensure_index()
 
-        # Step 1: generate hypothetical document(s).
         with Timer() as t_gen:
             hypo_docs = self._generate_hypothetical_docs(query)
 
         logger.info("HyDE: generated %d hypothetical doc(s) in %.2f s.",
                      len(hypo_docs), t_gen.elapsed)
 
-        # Step 2: embed the hypothetical docs *as documents* (not queries)
-        # because they are meant to look like corpus passages.
+        # Embed as documents (not queries) since they pose as corpus passages.
         with Timer() as t_embed:
             hypo_embeddings = self.dense_retriever.embedder.embed_documents(hypo_docs)
-            # Average when multiple generations.
             if len(hypo_docs) > 1:
                 query_vec = hypo_embeddings.mean(axis=0, keepdims=True)
             else:
                 query_vec = hypo_embeddings
-            # Normalise for cosine similarity (IP index assumes unit vectors).
+            # Re-normalise: IP index assumes unit vectors.
             norm = np.linalg.norm(query_vec, axis=1, keepdims=True)
             norm = np.where(norm == 0.0, 1.0, norm)
             query_vec = (query_vec / norm).astype(np.float32)
 
         logger.debug("HyDE: embedding took %.1f ms.", t_embed.elapsed_ms)
 
-        # Step 3: search FAISS directly.
         k = min(top_k, self.dense_retriever._index.ntotal)
         scores, indices = self.dense_retriever._index.search(query_vec, k)
 

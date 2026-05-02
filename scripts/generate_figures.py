@@ -24,19 +24,15 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import numpy as np
 
-# ── Paths ─────────────────────────────────────────────────────────
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# Search order: prefer newer per-run output dir, fall back to legacy `results/`.
 RESULTS_DIRS = [
     os.path.join(ROOT, "data", "results"),
     os.path.join(ROOT, "results"),
 ]
 OUTDIR = os.path.join(ROOT, "paper_neurips", "figures")
 
-# ── Methods (ascending by overall Recall@5) ───────────────────────
-# The Hybrid+BGE-Rerank row points at the 1024-token (BAAI fine-tune length)
-# result, not the 512-token model-card-default file. The paper reports the
-# 1024 number throughout; figures must match.
+# Hybrid+BGE Rerank points at the 1024-token (BAAI fine-tune) result, not the
+# 512-token model-card default. The paper text uses 1024 throughout.
 METHODS = [
     ("dense_bge_m3_whole_doc.json", "Dense (BGE-M3)"),
     ("hyde_gpt41mini_whole_doc.json", "HyDE"),
@@ -53,26 +49,21 @@ METHODS = [
     ("hybrid_rrf+cohere_rerank_whole_doc.json", "Hybrid+Rerank"),
 ]
 
-# ── Visual encoding ──────────────────────────────────────────────
-# BGE-M3 family colors are lighter relatives of their OpenAI/Cohere siblings,
-# so figures still group "dense / hybrid / hybrid+rerank" visually. ColBERTv2
-# is its own architectural family (late interaction), distinct color and a
-# dotted dash to read as "single-method, but not dense."
 COLOR = {
     "HyDE": "#d62728", "Dense": "#ff7f0e", "Ctx Dense": "#bcbd22",
     "Multi-Query": "#9467bd", "BM25": "#1f77b4", "CRAG": "#17becf",
     "Hybrid RRF": "#2ca02c", "Ctx Hybrid": "#8c564b", "Hybrid+Rerank": "#e377c2",
-    "Dense (BGE-M3)": "#ffb87a",       # lighter orange (paired with Dense)
-    "Hybrid (BGE-M3)": "#7fc97f",       # lighter green (paired with Hybrid RRF)
-    "Hybrid+BGE Rerank": "#c45ca1",     # paired with Hybrid+Rerank
-    "ColBERTv2": "#7B3294",             # deep violet, distinct from purple Multi-Query
+    "Dense (BGE-M3)": "#ffb87a",
+    "Hybrid (BGE-M3)": "#7fc97f",
+    "Hybrid+BGE Rerank": "#c45ca1",
+    "ColBERTv2": "#7B3294",
 }
 MARKER = {
     "HyDE": "v", "Dense": "s", "Ctx Dense": "D",
     "Multi-Query": "P", "BM25": "o", "CRAG": "^",
     "Hybrid RRF": "X", "Ctx Hybrid": "*", "Hybrid+Rerank": "h",
     "Dense (BGE-M3)": "<", "Hybrid (BGE-M3)": ">", "Hybrid+BGE Rerank": "p",
-    "ColBERTv2": "8",                   # filled octagon, unused elsewhere
+    "ColBERTv2": "8",
 }
 DASH = {
     "HyDE": (0, (3, 2)), "Dense": (0, (3, 2)), "BM25": (0, (3, 2)),
@@ -80,19 +71,13 @@ DASH = {
     "Hybrid RRF": "solid", "Ctx Hybrid": "solid", "Hybrid+Rerank": "solid",
     "Dense (BGE-M3)": (0, (3, 2)), "Hybrid (BGE-M3)": "solid",
     "Hybrid+BGE Rerank": "solid",
-    "ColBERTv2": (0, (1, 1.5)),         # fine dotted: single-method, late-interaction
+    "ColBERTv2": (0, (1, 1.5)),
 }
 
-# ── Layout constants (NeurIPS 2026 single-column, textwidth = 5.5 in) ──
-# NeurIPS is single-column so figure and figure* are equivalent; targeting
-# the actual textwidth here means \includegraphics[width=\textwidth] is a
-# no-op rather than a stretch. Half-width is for figures paired in a
-# minipage/side-by-side arrangement (rare in our paper).
-TEXT_W = 5.5    # NeurIPS textwidth in inches
-COL_W = 5.5     # single column == textwidth in single-column layout
-HALF_W = 3.3    # only for explicitly half-width pairings
+TEXT_W = 5.5
+COL_W = 5.5
+HALF_W = 3.3
 
-# ── Matplotlib global style ──────────────────────────────────────
 plt.rcParams.update({
     "font.family": "serif",
     "font.serif": ["Times New Roman", "Times", "DejaVu Serif"],
@@ -116,7 +101,6 @@ METRIC_GREEN = "#2ca02c"
 METRIC_BLUE = "#1f77b4"
 
 
-# ── Helpers ──────────────────────────────────────────────────────
 def load_json(fname):
     """Load a result JSON, searching `RESULTS_DIRS` in order."""
     for d in RESULTS_DIRS:
@@ -137,7 +121,6 @@ def save(fig, name):
     print(f"  {name}.pdf + .png")
 
 
-# ── Data loading ─────────────────────────────────────────────────
 def load_all_data():
     """Load every method in METHODS; skip (with a warning) any that are missing.
 
@@ -166,12 +149,10 @@ def load_all_data():
     return agg, sub_r5
 
 
-# ── Figure 1: Recall@k Curves (full-width figure*) ──────────────
 def fig1_recall_at_k(agg):
     print("Figure 1: Recall@k curves")
     ks = [1, 3, 5, 10, 20]
-    # Extra height to fit a 4-column legend above the plot. 13 methods at
-    # ncol=4 wraps to 4 legend rows, hence the bump from 3.4 to 3.7 in.
+    # Height fits a 4-row legend above the plot (13 methods, ncol=4).
     fig, ax = plt.subplots(figsize=(TEXT_W, 3.7))
 
     for _, name in METHODS:
@@ -202,7 +183,6 @@ def fig1_recall_at_k(agg):
     save(fig, "recall_at_k")
 
 
-# ── Figure 2: Main Comparison Bar Chart (full-width figure*) ─────
 def fig2_main_comparison(agg):
     print("Figure 2: Main comparison bars")
     metrics = [
@@ -243,15 +223,12 @@ def fig2_main_comparison(agg):
     save(fig, "main_comparison")
 
 
-# ── Figure 3: Subset Heatmap (single-column) ────────────────────
 def fig3_subset_heatmap(sub_r5):
     print("Figure 3: Subset heatmap")
     subsets = ["ConvFinQA", "FinQA", "TAT-DQA"]
     names = [name for _, name in METHODS]
     z = np.array([[sub_r5[name][s] for s in subsets] for name in names])
 
-    # Transpose layout: methods on x-axis, subsets on y-axis. With 12 methods,
-    # vertical labels read better than a 12-row tall heatmap.
     fig, ax = plt.subplots(figsize=(TEXT_W, 2.6))
     im = ax.imshow(z.T, cmap="YlOrRd", aspect="auto", vmin=0.45, vmax=0.90)
 
@@ -261,7 +238,6 @@ def fig3_subset_heatmap(sub_r5):
     ax.set_xticklabels(names, fontsize=7.5, rotation=35, ha="right")
     ax.xaxis.set_ticks_position("bottom")
 
-    # Annotate cells (transposed: x=method index i, y=subset index j)
     for i in range(len(names)):
         for j in range(len(subsets)):
             val = z[i, j]
@@ -276,7 +252,6 @@ def fig3_subset_heatmap(sub_r5):
     save(fig, "subset_heatmap")
 
 
-# ── Figure 4: Retrieval-Generation Correlation (single-column) ──
 def fig4_correlation(agg):
     print("Figure 4: Retrieval-generation correlation")
     gen = {g["tag"]: g["nm"] for g in load_json("generation_all_fixed.json")}
@@ -298,8 +273,6 @@ def fig4_correlation(agg):
     r = float(np.corrcoef(xs_a, ys_a)[0, 1])
     xl = np.linspace(0.5, 1.08, 100)
 
-    # Half-width (3.3 in): only 4 data points, full textwidth would look sparse.
-    # LaTeX side uses \includegraphics[width=0.55\textwidth] for this one.
     fig, ax = plt.subplots(figsize=(HALF_W, 2.5))
     ax.plot(xl, slope * xl + intercept, "--", color="gray", alpha=0.5, linewidth=1.2)
 
@@ -322,7 +295,6 @@ def fig4_correlation(agg):
     save(fig, "retrieval_generation_correlation")
 
 
-# ── Figure 5: Fusion Ablation (two-panel, full-width figure*) ───
 def fig5_fusion_ablation():
     print("Figure 5: Fusion ablation")
     cc_alpha = [0.3, 0.5, 0.7, 0.9]
@@ -337,10 +309,6 @@ def fig5_fusion_ablation():
 
     mkr = dict(markersize=6, markeredgecolor="white", markeredgewidth=0.6)
 
-    # Left: Convex Combination. R@5 peaks at alpha=0.5 (0.726) and dips to
-    # 0.614 at alpha=0.9; MRR@3 dips to 0.401 at alpha=0.9. The lower-center
-    # region (Y around 0.40) sits between the two curves only at the right
-    # edge, so we put a single shared legend below both panels instead.
     ax1.plot(cc_alpha, cc_r5, "o-", color=METRIC_GREEN, linewidth=1.8, label="R@5", **mkr)
     ax1.plot(cc_alpha, cc_mrr, "s--", color=METRIC_BLUE, linewidth=1.8, label="MRR@3", **mkr)
     ax1.set_xlabel(r"$\alpha$ (dense weight)")
@@ -350,7 +318,6 @@ def fig5_fusion_ablation():
     ax1.spines["top"].set_visible(False)
     ax1.spines["right"].set_visible(False)
 
-    # Right: RRF
     ax2.plot(rrf_k, rrf_r5, "o-", color=METRIC_GREEN, linewidth=1.8, label="R@5", **mkr)
     ax2.plot(rrf_k, rrf_mrr, "s--", color=METRIC_BLUE, linewidth=1.8, label="MRR@3", **mkr)
     ax2.set_xlabel("k (RRF smoothing)")
@@ -358,7 +325,6 @@ def fig5_fusion_ablation():
     ax2.spines["top"].set_visible(False)
     ax2.spines["right"].set_visible(False)
 
-    # Single shared legend below both panels.
     handles, labels = ax1.get_legend_handles_labels()
     fig.legend(handles, labels, loc="lower center", ncol=2,
                bbox_to_anchor=(0.5, 0.0), framealpha=0.95,
@@ -368,7 +334,6 @@ def fig5_fusion_ablation():
     save(fig, "fusion_ablation")
 
 
-# ── Figure 6: Reranker Depth Ablation (single-column) ───────────
 def fig6_reranker_depth():
     print("Figure 6: Reranker depth")
     raw = load_json("reranker_depth_ablation.json")
@@ -398,7 +363,6 @@ def fig6_reranker_depth():
     save(fig, "reranker_depth")
 
 
-# ── Main ─────────────────────────────────────────────────────────
 def main():
     print("Loading data...")
     agg, sub_r5 = load_all_data()

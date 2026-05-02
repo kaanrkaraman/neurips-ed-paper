@@ -90,15 +90,10 @@ class HyPERetriever(BaseRetriever):
             azure_endpoint=os.getenv("AZURE_LLM_ENDPOINT"),
         )
 
-        # Populated by build_index
         self._index: faiss.IndexFlatIP | None = None
-        self._index_doc_ids: list[str] = []       # one entry per FAISS vector
-        self._doc_id_to_text: dict[str, str] = {}  # original doc texts
-        self._doc_ids: list[str] = []              # unique, ordered
-
-    # ------------------------------------------------------------------
-    # Synthetic question generation
-    # ------------------------------------------------------------------
+        self._index_doc_ids: list[str] = []
+        self._doc_id_to_text: dict[str, str] = {}
+        self._doc_ids: list[str] = []
 
     def _generate_synthetic_queries(self, text: str, n: int) -> list[str]:
         """Generate *n* synthetic questions for *text* using the LLM.
@@ -130,22 +125,16 @@ class HyPERetriever(BaseRetriever):
             logger.exception("HyPE: LLM call failed for synthetic query generation.")
             return []
 
-        # Parse numbered lines like "1. What is ..." or plain lines.
         questions: list[str] = []
         for line in raw.strip().splitlines():
             line = line.strip()
             if not line:
                 continue
-            # Strip leading numbering (e.g. "1. ", "1) ", "- ").
             cleaned = line.lstrip("0123456789.-) ").strip()
             if cleaned:
                 questions.append(cleaned)
 
         return questions[:n]
-
-    # ------------------------------------------------------------------
-    # Index construction
-    # ------------------------------------------------------------------
 
     def build_index(self, doc_ids: list[str], documents: list[str]) -> None:
         """Generate synthetic queries for each document, embed them, and build index.
@@ -176,7 +165,6 @@ class HyPERetriever(BaseRetriever):
         self._doc_ids = list(doc_ids)
         self._doc_id_to_text = dict(zip(doc_ids, documents))
 
-        # Step 1: generate synthetic questions for every document.
         all_synth_queries: list[str] = []
         self._index_doc_ids = []
 
@@ -186,7 +174,6 @@ class HyPERetriever(BaseRetriever):
                     doc, self.num_queries_per_chunk
                 )
                 if not queries:
-                    # Fallback: use a truncated version of the document itself.
                     logger.warning(
                         "HyPE: no synthetic queries for doc %s; "
                         "falling back to document text.", did,
@@ -205,7 +192,6 @@ class HyPERetriever(BaseRetriever):
             len(all_synth_queries), t_gen.elapsed,
         )
 
-        # Step 2: embed all synthetic queries.
         with Timer() as t_embed:
             embeddings = self.embedder.embed_queries(all_synth_queries)
             embeddings = embeddings.astype(np.float32)
@@ -215,7 +201,6 @@ class HyPERetriever(BaseRetriever):
             embeddings.shape[0], t_embed.elapsed, embeddings.shape[1],
         )
 
-        # Step 3: build FAISS inner-product index.
         with Timer() as t_index:
             dimension = embeddings.shape[1]
             self._index = faiss.IndexFlatIP(dimension)
@@ -225,10 +210,6 @@ class HyPERetriever(BaseRetriever):
             "HyPE: FAISS index built in %.2f s (%d vectors).",
             t_index.elapsed, self._index.ntotal,
         )
-
-    # ------------------------------------------------------------------
-    # Retrieval
-    # ------------------------------------------------------------------
 
     def _ensure_index(self) -> None:
         if self._index is None:
@@ -259,14 +240,13 @@ class HyPERetriever(BaseRetriever):
 
         query_vec = self.embedder.embed_queries([query]).astype(np.float32)
 
-        # Fetch more candidates than top_k to account for deduplication.
+        # Oversample because synthetic-question hits will deduplicate by doc_id.
         candidate_k = min(
             top_k * self.num_queries_per_chunk,
             self._index.ntotal,
         )
         scores, indices = self._index.search(query_vec, candidate_k)
 
-        # Deduplicate: keep best score per doc_id.
         best_per_doc: dict[str, float] = {}
         for score, idx in zip(scores[0], indices[0]):
             if idx == -1:
@@ -275,7 +255,6 @@ class HyPERetriever(BaseRetriever):
             if did not in best_per_doc or score > best_per_doc[did]:
                 best_per_doc[did] = float(score)
 
-        # Sort by score descending and take top_k.
         sorted_docs = sorted(best_per_doc.items(), key=lambda x: x[1], reverse=True)
         sorted_docs = sorted_docs[:top_k]
 

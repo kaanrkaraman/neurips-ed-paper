@@ -201,16 +201,13 @@ class LocalEmbedder(BaseEmbedder):
     def __init__(self, model_name: str = "BAAI/bge-m3", max_seq_length: int = 8192):
         from sentence_transformers import SentenceTransformer
         self.model = SentenceTransformer(model_name)
-        # Don't exceed the model's native maximum (e.g. bge-large-en caps at 512).
-        # Most modern dense encoders have native maxes set on load:
-        #   BGE-M3: 8192, text-embedding-3-large: 8191 (API), bge-large-en: 512.
+        # Cap at the model's native maximum (e.g. bge-large-en hard-caps at 512).
         native_max = getattr(self.model, "max_seq_length", max_seq_length)
         self.model.max_seq_length = min(max_seq_length, native_max)
         self._dimension = self.model.get_sentence_embedding_dimension()
 
-        # Auto-scale batch sizes for the active device. Long sequences (>4096
-        # tokens) get a smaller docs_batch on CUDA so attention activations stay
-        # within the memory budget on a 40-100 GB datacenter card.
+        # >4096-token sequences shrink docs_batch so attention activations fit
+        # in 40-100 GB GPU memory.
         try:
             import torch
             self._on_cuda = torch.cuda.is_available()

@@ -44,9 +44,8 @@ def ndcg_at_k(
     dcg = 0.0
     for i, doc_id in enumerate(retrieved_ids[:k]):
         if doc_id in relevant_ids:
-            dcg += 1.0 / np.log2(i + 2)  # i+2 because i is 0-indexed
+            dcg += 1.0 / np.log2(i + 2)
 
-    # Ideal DCG: all relevant docs at top
     ideal_len = min(len(relevant_ids), k)
     idcg = sum(1.0 / np.log2(i + 2) for i in range(ideal_len))
 

@@ -71,8 +71,7 @@ class LocalCrossEncoderReranker(BaseReranker):
         self.model = CrossEncoder(model_name, max_length=max_length)
         self.name = model_name.split("/")[-1]
 
-        # Auto-cap batch size for non-CUDA devices: MPS hits buffer-size errors
-        # on long financial docs (verified) above ~8. CUDA can take 128+.
+        # MPS hits buffer-size errors above ~8 on long financial docs.
         try:
             import torch
             on_cuda = torch.cuda.is_available()
@@ -92,7 +91,6 @@ class LocalCrossEncoderReranker(BaseReranker):
         if not documents:
             return []
 
-        # Truncate doc text to avoid MPS buffer blowup on very long financial docs
         pairs = [[query, d.text[:4096]] for d in documents]
         scores = self.model.predict(pairs, batch_size=self.batch_size, show_progress_bar=False)
 

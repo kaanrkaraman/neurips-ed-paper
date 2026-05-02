@@ -59,7 +59,7 @@ def _load_per_query(filename: str, metric: str) -> list[float] | None:
     pq = d.get("per_query_results", [])
     if not pq:
         return None
-    # Sort by query_id so paired alignment matches across files.
+    # Sort so paired alignment matches across files.
     pq_sorted = sorted(pq, key=lambda q: q.get("query_id", q.get("id", "")))
     out = [q.get(metric) for q in pq_sorted]
     return out if all(v is not None for v in out) else None
@@ -114,7 +114,6 @@ def main():
         rows.append({"label": label, **res, "n": len(scores_a)})
         p_values.append(res["p_value"])
 
-    # Bonferroni over the family of valid comparisons.
     valid_p = [p for p in p_values if p is not None]
     if valid_p:
         adj = bonferroni_correction(valid_p)
@@ -123,7 +122,6 @@ def main():
             if "p_value" in r:
                 r["bonferroni"] = next(adj_iter)
 
-    # Render Markdown.
     out = ["## BGE-M3 paired bootstrap (per-query " + args.metric + ")\n"]
     out.append(f"_n_resamples = {args.n_resamples}, B-corrected over m = {len(valid_p)} comparisons._\n")
     out.append("| Comparison | n | mean diff | p (raw) | p < α (raw) | sig (Bonferroni) | 95% CI |")

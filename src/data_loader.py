@@ -91,7 +91,6 @@ def load_t2ragbench(
         logger.info(f"Loading subset: {subset_name}")
         ds = load_dataset("G4KMU/t2-ragbench", subset_name, cache_dir=cache_dir)
 
-        # Determine which splits to use
         available_splits = list(ds.keys())
         if split and split in available_splits:
             splits_to_use = [split]
@@ -103,7 +102,6 @@ def load_t2ragbench(
             for row in ds[sp]:
                 context_id = row["context_id"]
 
-                # Build QA item
                 qa = QAItem(
                     id=row["id"],
                     subset=subset_name,
@@ -124,7 +122,6 @@ def load_t2ragbench(
                 )
                 subset_items.append(qa)
 
-                # Add to corpus (deduplicate by context_id)
                 if context_id not in corpus:
                     corpus[context_id] = Document(
                         doc_id=context_id,

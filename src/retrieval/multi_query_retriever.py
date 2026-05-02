@@ -95,10 +95,6 @@ class MultiQueryRetriever(BaseRetriever):
             azure_endpoint=os.getenv("AZURE_LLM_ENDPOINT"),
         )
 
-    # ------------------------------------------------------------------
-    # Index construction (delegates to inner retriever)
-    # ------------------------------------------------------------------
-
     def build_index(self, doc_ids: list[str], documents: list[str]) -> None:
         """Build the index by delegating to the inner retriever.
 
@@ -114,10 +110,6 @@ class MultiQueryRetriever(BaseRetriever):
             self.inner_retriever.name,
         )
         self.inner_retriever.build_index(doc_ids, documents)
-
-    # ------------------------------------------------------------------
-    # Query variant generation
-    # ------------------------------------------------------------------
 
     def _generate_query_variants(self, query: str, n: int) -> list[str]:
         """Generate *n* alternative phrasings of *query* using the LLM.
@@ -151,22 +143,16 @@ class MultiQueryRetriever(BaseRetriever):
             )
             return []
 
-        # Parse numbered lines.
         variants: list[str] = []
         for line in raw.strip().splitlines():
             line = line.strip()
             if not line:
                 continue
-            # Strip leading numbering (e.g. "1. ", "1) ", "- ").
             cleaned = line.lstrip("0123456789.-) ").strip()
             if cleaned:
                 variants.append(cleaned)
 
         return variants[:n]
-
-    # ------------------------------------------------------------------
-    # Reciprocal Rank Fusion
-    # ------------------------------------------------------------------
 
     @staticmethod
     def _rrf_fuse(
@@ -207,10 +193,6 @@ class MultiQueryRetriever(BaseRetriever):
             for did in scores
         }
 
-    # ------------------------------------------------------------------
-    # Retrieval
-    # ------------------------------------------------------------------
-
     def retrieve(self, query: str, top_k: int = 5) -> list[RetrievedDoc]:
         """Generate query variants, retrieve for each, and RRF-fuse results.
 
@@ -226,7 +208,6 @@ class MultiQueryRetriever(BaseRetriever):
         list[RetrievedDoc]
             RRF-fused results sorted by descending fused score.
         """
-        # Step 1: generate query variants.
         with Timer() as t_gen:
             variants = self._generate_query_variants(query, self.num_queries)
 
@@ -235,20 +216,17 @@ class MultiQueryRetriever(BaseRetriever):
             len(variants), t_gen.elapsed,
         )
 
-        # Build the full query set.
         all_queries: list[str] = []
         if self.include_original:
             all_queries.append(query)
         all_queries.extend(variants)
 
-        # Ensure we have at least the original query.
         if not all_queries:
             logger.warning(
                 "MultiQuery: no variants generated; falling back to original query."
             )
             all_queries = [query]
 
-        # Step 2: retrieve for each query variant.
         with Timer() as t_retrieve:
             result_lists: list[list[RetrievedDoc]] = []
             for q in all_queries:
@@ -260,10 +238,8 @@ class MultiQueryRetriever(BaseRetriever):
             len(all_queries), t_retrieve.elapsed,
         )
 
-        # Step 3: RRF fusion.
         fused = self._rrf_fuse(result_lists, k=self.rrf_k)
 
-        # Sort by fused score descending and take top_k.
         sorted_docs = sorted(
             fused.items(), key=lambda x: x[1]["score"], reverse=True,
         )[:top_k]

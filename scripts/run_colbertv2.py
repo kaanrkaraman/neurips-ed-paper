@@ -174,7 +174,6 @@ def main():
 
     RAGPretrainedModel = _load_ragatouille()
 
-    # ---------- Data ----------
     logger.info("Loading T2-RAGBench...")
     data = load_t2ragbench()
     qa_items = data.qa_items[:args.max_queries] if args.max_queries else data.qa_items
@@ -183,7 +182,6 @@ def main():
     doc_texts = [d.text for d in docs]
     logger.info(f"Corpus: {len(doc_ids)} docs, queries: {len(qa_items)}")
 
-    # ---------- Index ----------
     INDEX_ROOT.mkdir(parents=True, exist_ok=True)
     index_dir = INDEX_ROOT / INDEX_NAME
 
@@ -222,7 +220,6 @@ def main():
         print(f"[colbertv2] Indexing finished in {index_timer.elapsed:.1f}s "
               f"({size_mb:.1f}MB across {n_files} files)", flush=True)
 
-    # ---------- Retrieval ----------
     passages_per_query = max(args.top_k * args.passage_oversample, 50)
     all_retrieved: list[list[RetrievedDoc]] = []
     all_relevant_ids: list[set[str]] = []
@@ -254,14 +251,11 @@ def main():
         })
         latencies_ms.append(latency_ms)
 
-        # Lightweight running R@5 in the bar so the user sees quality drift,
-        # not just throughput. Updated every 100 queries to keep cost trivial.
         if len(per_query) % 100 == 0:
             running_r5 = sum(r.get("recall@5", 0.0) for r in per_query) / len(per_query)
             pbar.set_postfix(R5=f"{running_r5:.3f}", lat_ms=f"{latency_ms:.0f}")
     pbar.close()
 
-    # ---------- Aggregate metrics ----------
     retrieval_metrics = compute_retrieval_metrics(all_retrieved, all_relevant_ids)
     logger.info(
         "ColBERTv2 retrieval metrics: "
@@ -271,7 +265,6 @@ def main():
         f"nDCG@10={retrieval_metrics.get('ndcg@10'):.4f}"
     )
 
-    # ---------- Provenance ----------
     provenance = collect_provenance(
         embedding_model=CHECKPOINT,
         index_path=index_dir,
@@ -286,7 +279,6 @@ def main():
         except OSError:
             pass
 
-    # ---------- Save ----------
     result = ExperimentResult(
         method="colbertv2",
         config={

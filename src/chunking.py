@@ -116,7 +116,6 @@ def parent_child_chunks(
         children = fixed_size_chunks(
             parent.chunk_id, parent.text, child_size, overlap, "word"
         )
-        # Point children back to original document
         for child in children:
             child.metadata = {"parent_chunk_id": parent.chunk_id, "original_doc_id": doc_id}
         all_children.extend(children)

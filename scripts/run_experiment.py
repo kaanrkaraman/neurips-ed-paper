@@ -51,7 +51,6 @@ def _get_or_build_dense(embedder, emb_key: str, chunk_strategy: str,
     if cache_dir.exists() and (cache_dir / "index.faiss").exists():
         logger.info(f"Loading cached dense index from {cache_dir}")
         retriever.load_index(cache_dir)
-        # Sanity check: doc count matches
         if len(retriever._doc_ids) != len(doc_ids):
             logger.warning(
                 f"Cached index has {len(retriever._doc_ids)} docs but corpus has "
@@ -183,10 +182,8 @@ def main(
     set_seed(cfg["seed"])
     cfg["_embedding_key"] = emb_key
 
-    # Validate reranker key NOW, before any expensive data load or index build.
-    # A typo'd or missing key used to silently fall through to NoReranker; we
-    # caught that the hard way (1228 s no-op run on the H100). Fail loud, fail
-    # early.
+    # Fail loud before any expensive load: a typo'd reranker key used to fall
+    # through silently to NoReranker (caused a 1228 s no-op H100 run).
     if reranker_key != "none" and reranker_key not in cfg["rerankers"]:
         available = ", ".join(sorted(cfg["rerankers"].keys())) or "(none defined)"
         raise click.UsageError(
@@ -196,16 +193,13 @@ def main(
             "to vary the operating point without editing YAML."
         )
 
-    # Load data
     logger.info("Loading T²-RAGBench...")
     subsets = [subset] if subset else cfg["dataset"]["subsets"]
     data = load_t2ragbench(subsets=subsets)
 
-    # Build corpus
     doc_ids = list(data.corpus.keys())
     documents = [data.corpus[did].text for did in doc_ids]
 
-    # Chunk if needed
     chunk_strategy = cfg["chunking"]["strategy"]
     chunk_ids, chunk_texts, chunk_to_doc = chunk_corpus(
         doc_ids, documents,
@@ -214,35 +208,19 @@ def main(
         chunk_overlap=cfg["chunking"]["chunk_overlap"],
     )
 
-    # Build retriever
     logger.info(f"Building retriever: {method} (embedding: {emb_key})")
     with Timer() as index_timer:
         retriever = build_retriever(method, cfg, chunk_ids, chunk_texts)
     logger.info(f"Index built in {index_timer.elapsed:.1f}s")
 
-    # Setup reranker (lazy import).
-    #
-    # Precedence rule: a non-"none" --reranker is a hard requirement. If the
-    # YAML doesn't define that key we FAIL LOUDLY rather than silently falling
-    # back to NoReranker — that exact silent fallthrough caused a 1228 s
-    # "no-op" run on the H100 where bge_1024 wasn't in the pulled YAML and the
-    # rerank pass never executed (metrics matched unreranked hybrid byte-for-byte).
     if reranker_key == "none":
         from src.reranking.reranker import NoReranker
         reranker = NoReranker()
         rerank_top_k = top_k
         effective_reranker_max_length: int | None = None
     else:
-        if reranker_key not in cfg["rerankers"]:
-            available = ", ".join(sorted(cfg["rerankers"].keys())) or "(none defined)"
-            raise click.UsageError(
-                f"--reranker={reranker_key!r} is not defined in configs/default.yaml "
-                f"under 'rerankers'. Available keys: {available}. "
-                "Pass --reranker bge with --reranker-max-length / --reranker-batch-size "
-                "to vary the operating point without editing YAML."
-            )
         from src.reranking.reranker import create_reranker
-        rcfg = dict(cfg["rerankers"][reranker_key])  # copy: don't mutate config
+        rcfg = dict(cfg["rerankers"][reranker_key])
         if reranker_max_length is not None:
             rcfg["max_length"] = reranker_max_length
         if reranker_batch_size is not None:
@@ -251,7 +229,6 @@ def main(
         rerank_top_k = rcfg.get("top_n", top_k)
         effective_reranker_max_length = rcfg.get("max_length")
 
-    # Prepare queries
     qa_items = data.qa_items[:max_queries] if max_queries else data.qa_items
     queries = [qa.question for qa in qa_items]
     relevant_ids = []
@@ -259,30 +236,25 @@ def main(
         if chunk_strategy == "whole_doc":
             relevant_ids.append({qa.context_id})
         else:
-            # Find all chunks that belong to the gold document
             relevant_chunks = {
                 cid for cid, did in chunk_to_doc.items() if did == qa.context_id
             }
             relevant_ids.append(relevant_chunks)
 
-    # Run retrieval
     logger.info(f"Retrieving for {len(queries)} queries (top_k={top_k})...")
     all_retrieved = []
     latencies = []
 
     for query in tqdm(queries, desc=f"Retrieving [{method}]"):
         with Timer() as t:
-            # Retrieve more candidates for reranking
             candidates = retriever.retrieve(query, top_k=max(top_k * 3, 20))
             results = reranker.rerank(query, candidates, top_k=top_k)
         all_retrieved.append(results)
         latencies.append(t.elapsed_ms)
 
-    # Compute metrics
     k_values = cfg["evaluation"]["k_values"]
     retrieval_metrics = compute_retrieval_metrics(all_retrieved, relevant_ids, k_values)
 
-    # Per-query results
     per_query = []
     for i, (qa, retrieved) in enumerate(zip(qa_items, all_retrieved)):
         pq = compute_per_query_retrieval(retrieved, relevant_ids[i], k_values)
@@ -292,20 +264,17 @@ def main(
         pq["retrieved_ids"] = [r.doc_id for r in retrieved]
         per_query.append(pq)
 
-    # Build result
     method_label = method
     if reranker_key != "none":
         method_label += f"+{reranker_key}"
 
-    # Collect reproducibility metadata. Embedding-model HF revision and FAISS
-    # index SHA-256 are best-effort: skipped silently if unavailable.
     emb_model_name = (
         cfg["embedding_models"].get(emb_key, {}).get("model")
         if emb_key in cfg.get("embedding_models", {})
         else None
     )
-    # Mirror the cache-suffix logic in _get_or_build_dense so index_faiss_sha256
-    # resolves to the actual on-disk index (now scoped by max_seq_length).
+    # Must mirror the cache-suffix logic in _get_or_build_dense so the SHA-256
+    # resolves to the same on-disk index file.
     _max_seq = None
     if hasattr(retriever, "embedder") and hasattr(retriever.embedder, "max_seq_length"):
         _max_seq = retriever.embedder.max_seq_length
@@ -322,15 +291,10 @@ def main(
         index_path=index_path,
     )
 
-    # Capture the actual operating-point hyperparameters that govern fair
-    # comparison across encoders/rerankers. Recorded so any reviewer can verify
-    # the comparison from the result JSON alone, without inspecting code.
     embedder_max_seq = _max_seq
     candidate_pool_size = max(top_k * 3, 20)
 
-    # Sum every file in the index dir, not just index.faiss; ColBERT-style
-    # indices have multiple shard files, FAISS-flat has just one. Either way
-    # the total bytes-on-disk is what reviewers care about.
+    # rglob, not just index.faiss: ColBERT indices have multiple shard files.
     index_size_mb = 0.0
     if index_path.exists():
         try:
@@ -364,12 +328,10 @@ def main(
         avg_latency_ms=float(sum(latencies) / len(latencies)) if latencies else 0,
     )
 
-    # Save
     fname = output_name or f"{method_label}_{emb_key}_{chunk_strategy}"
     output_path = RESULTS_DIR / f"{fname}.json"
     result.save(output_path)
 
-    # Print summary
     logger.info(f"\n{'='*60}")
     logger.info(f"Method: {method_label}")
     logger.info(f"Embedding: {emb_key} | Reranker: {reranker_key}")

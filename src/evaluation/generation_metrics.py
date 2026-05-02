@@ -12,11 +12,8 @@ import numpy as np
 def normalize_answer(text: str) -> str:
     """Normalize answer text for comparison (SQuAD-style)."""
     text = text.lower().strip()
-    # Remove articles
     text = re.sub(r"\b(a|an|the)\b", " ", text)
-    # Remove punctuation
     text = text.translate(str.maketrans("", "", string.punctuation))
-    # Collapse whitespace
     text = " ".join(text.split())
     return text
 
@@ -24,10 +21,8 @@ def normalize_answer(text: str) -> str:
 def extract_number(text: str) -> float | None:
     """Extract the primary number from a text string."""
     text = text.strip()
-    # Remove common prefixes/suffixes
     text = text.replace("$", "").replace("%", "").replace(",", "")
     text = text.replace("(", "-").replace(")", "")
-    # Try to extract a float
     match = re.search(r"-?\d+\.?\d*", text)
     if match:
         try:
@@ -58,11 +53,10 @@ def number_match(prediction: str, gold: str, epsilon: float = 1e-2) -> float:
     if pred_num is None or gold_num is None:
         return 0.0
 
-    # Direct comparison
     if _relative_close(pred_num, gold_num, epsilon):
         return 1.0
 
-    # Scale-invariant: try ×100 and ÷100 for percentage/decimal mismatch
+    # Try ×100 and ÷100 to handle percentage/decimal scale mismatch.
     for scale in [100.0, 0.01]:
         if _relative_close(pred_num * scale, gold_num, epsilon):
             return 1.0
