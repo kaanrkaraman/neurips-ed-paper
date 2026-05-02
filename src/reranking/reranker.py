@@ -22,7 +22,7 @@ class AzureCohereReranker(BaseReranker):
         self.top_n = top_n
         self.api_key = os.getenv("AZURE_API_KEY")
         self.endpoint = (
-            f"{os.getenv('AZURE_LLM_ENDPOINT', 'https://aif-meftun-academic-work.services.ai.azure.com')}"
+            f"{os.getenv('AZURE_LLM_ENDPOINT', 'https://YOUR-AZURE-ENDPOINT.services.ai.azure.com')}"
             f"/providers/cohere/v2/rerank"
         )
 
